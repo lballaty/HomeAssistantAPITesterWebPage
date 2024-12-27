@@ -348,10 +348,10 @@
     // Fetch all entities from /api/states
     document.getElementById('fetch-entities').addEventListener('click', async function () {
       toggleLoading(true);
-      const protocol = document.getElementById('protocol').value;
-      const ip = document.getElementById('ip').value.trim();
-      const port = document.getElementById('port').value.trim();
-      const token = document.getElementById('token').value.trim();
+        const protocol = document.getElementById('protocol').value.trim();
+        const ip = document.getElementById('ip').value.trim();
+        const port = document.getElementById('port').value.trim();
+        const token = document.getElementById('token').value.trim();
 
       const entitiesUrl = `${protocol}://${ip}:${port}/api/states`;
       const requestDetails = {
@@ -547,17 +547,44 @@
         .catch(() => showToast('Failed to copy response', 'danger'));
     });
 
-    // Example: fetch entity-device relationships from a hypothetical /api/device_info
-    document.getElementById('fetch-relationships').addEventListener('click', async function () {
-      toggleLoading(true);
+    // Example: fetch entity-device relationships from an API Endpoint
+    document.getElementById('fetch-relationships').addEventListener('click', async function ()
 
-      const protocol = document.getElementById('protocol').value;
+     {
+      toggleLoading(true);
+// Retrieve and trim input values
+      const protocol = document.getElementById('protocol').value.trim();
       const ip = document.getElementById('ip').value.trim();
       const port = document.getElementById('port').value.trim();
       const token = document.getElementById('token').value.trim();
+      const endpoint = document.getElementById('endpoint').value.trim();
+      const entityId = document.getElementById('entity-input').value.trim();
+
+// validate the user input
+function isValidInput(input) {
+  return input && input.trim() !== '';
+}
+
+if (![protocol, ip, port, token, endpoint, entityId].every(isValidInput)) {
+  document.getElementById('error-message').textContent = 'Please fill in all required fields.';
+  toggleLoading(false);
+  return;
+}
+
 
       // Hypothetical endpoint; replace with the actual one you want
-      const deviceInfoUrl = `${protocol}://${ip}:${port}/api/device_info`;
+      let deviceInfoUrl = `${protocol}://${ip}:${port}${endpoint}`;
+
+      if (isValidInput(entityId)) {
+     // Ensure the endpoint does not end with a slash
+        if (deviceInfoUrl.endsWith('/')) {
+           deviceInfoUrl = deviceInfoUrl.slice(0, -1);
+       }
+         // Append the encoded entityId
+       deviceInfoUrl += `/${encodeURIComponent(entityId)}`;
+      }
+
+
 
       try {
         const response = await fetch(deviceInfoUrl, {
