@@ -85,6 +85,9 @@
       <p id="client-port">Determining port...</p>
     </div>
 
+     <div class="text-danger" id="error-message"></div>
+  </div>   
+
     <form id="ha-form">
       <div class="mb-3">
         <label for="protocol" class="form-label">Protocol:</label>
@@ -233,11 +236,14 @@
     <button type="button" id="copy-response" class="btn btn-outline-primary btn-sm">Copy Response</button>
 
     <h2>Entity-Device Relationships:</h2>
-    <pre id="relationships-box"></pre>
+    <pre id="relationships-box" contenteditable="true"></pre>
     <button type="button" id="fetch-relationships" class="btn btn-outline-secondary btn-sm">Fetch Relationships</button>
 
-    <div class="text-danger" id="error-message"></div>
-  </div>
+
+    <pre id="headers-box" contenteditable="true"></pre>
+    <div id="relationships-box"></div>
+
+
 
   <!-- Help Modal -->
   <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
@@ -272,48 +278,165 @@
   ></script>
 
   <script>
-    let entities = [];
 
-    // On page load, retrieve theme from localStorage and set it
-    const storedTheme = localStorage.getItem('theme');
-    if (storedTheme === 'dark') {
-      document.body.classList.add('dark-mode');
+     // Utility functions: getHelpMessage, toggleLoadingSpinner, ShowToast notification
+
+        function getHelpMessage(topic) {
+      switch (topic) {
+        case 'endpoint':
+          return 'Endpoints define which part of the API you are accessing. For example, /api/states for states.';
+        case 'method':
+          return 'HTTP methods define the type of action: GET (retrieve), POST (create), PUT (update), DELETE (remove).';
+        case 'payload':
+          return 'Payloads are JSON objects sent with POST or PUT requests to specify data or configuration.';
+        default:
+          return 'No help available for this topic.';
+      }
     }
 
-    window.onload = function () {
-      // 1) Retrieve the saved protocol from localStorage on page load
-      const savedProtocol = localStorage.getItem('haProtocol');
-      if (savedProtocol) {
-        document.getElementById('protocol').value = savedProtocol;
-      }
+    // Utility: Toggle loading spinner overlay
+    function toggleLoading(show) {
+      document.getElementById('loadingOverlay').style.display = show ? 'block' : 'none';
+    }
+     
+    function showToast(message, type = 'primary') {
+      const toastEl = document.createElement('div');
+      toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+      toastEl.role = 'alert';
+      toastEl.setAttribute('aria-live', 'assertive');
+      toastEl.setAttribute('aria-atomic', 'true');
 
-      const savedToken = localStorage.getItem('haToken');
-      const savedIP = localStorage.getItem('haIP');
-      const savedPort = localStorage.getItem('haPort');
-      const savedEndpoint = localStorage.getItem('haEndpoint');
-      const savedEntity = localStorage.getItem('haEntity');
+      const toastBody = document.createElement('div');
+      toastBody.className = 'd-flex';
 
-      if (savedToken)  document.getElementById('token').value = savedToken;
-      if (savedIP)     document.getElementById('ip').value = savedIP;
-      if (savedPort)   document.getElementById('port').value = savedPort;
-      if (savedEndpoint) {
-        document.getElementById('endpoint').value = savedEndpoint;
-        if (savedEndpoint === '') {
-          document.getElementById('custom-endpoint').style.display = 'block';
-          document.getElementById('custom-endpoint').value = localStorage.getItem('haCustomEndpoint') || '';
+      const toastMessage = document.createElement('div');
+      toastMessage.className = 'toast-body';
+      toastMessage.textContent = message;
+
+      const closeButton = document.createElement('button');
+      closeButton.type = 'button';
+      closeButton.className = 'btn-close btn-close-white me-2 m-auto';
+      closeButton.setAttribute('data-bs-dismiss', 'toast');
+      closeButton.setAttribute('aria-label', 'Close');
+
+      toastBody.appendChild(toastMessage);
+      toastBody.appendChild(closeButton);
+      toastEl.appendChild(toastBody);
+
+      const toastContainer = document.getElementById('toastPlaceholder');
+      toastContainer.appendChild(toastEl);
+
+      const bsToast = new bootstrap.Toast(toastEl, { delay: 3000 });
+      bsToast.show();
+
+      toastEl.addEventListener('hidden.bs.toast', () => {
+        toastEl.remove();
+      });
+    }   
+
+  //--------------------------------------------------------
+  //User in put validation functions for the various fields.
+  //--------------------------------------------------------
+    
+  // validate the user input
+function isValidInput(input) {
+  return input && input.trim() !== '';
+}
+
+function isValidProtocol(proto) {
+  return ['http', 'https'].includes(proto.toLowerCase());
+}
+
+    function isValidIP(ip) {
+        const ipPattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+
+        return ipPattern.test(ip);
+    }
+
+    function isValidPort(port) {
+        const portNumber = parseInt(port, 10);
+        return portNumber > 0 && portNumber <= 65535;
+    }  
+
+  //--------------------------------------------------------
+  //Various Utility Functions
+  //--------------------------------------------------------
+// Utility function for syntax highlighting JSON
+function syntaxHighlight(json) {
+    if (typeof json !== 'string') {
+        json = JSON.stringify(json, undefined, 2);
+    }
+    json = json.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?)|(\b(true|false|null)\b)|(\d+)/g, function (match) {
+        let cls = 'number';
+        if (/^"/.test(match)) {
+            cls = /:$/.test(match) ? 'key' : 'string';
+        } else if (/true|false/.test(match)) {
+            cls = 'boolean';
+        } else if (/null/.test(match)) {
+            cls = 'null';
         }
-      }
-      if (savedEntity) {
-        document.getElementById('entity-input').value = savedEntity;
-      }
+        return `<span class="${cls}">${match}</span>`;
+    });
+}
 
-      fetchClientInfo();
-    };
+    // Show client's public IP and the current port to be displayed at top of screen
+    function fetchClientInfo() {
+      try {
+        fetch('https://api.ipify.org?format=json')
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById('client-ip').textContent = `Public IP Address: ${data.ip}`;
+          });
 
-    // 2) Store the protocol to localStorage whenever the select changes
+        const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        document.getElementById('client-port').textContent = `Port: ${port}`;
+      } catch (error) {
+        document.getElementById('client-ip').textContent = 'Unable to fetch IP address.';
+        document.getElementById('client-port').textContent = 'Unable to determine port.';
+      }
+    }
+
+   //------------------------------------------------------------
+   // 2) Function to update localStorage 
+   //------------------------------------------------------------
+
+// Function to update localStorage with current input field values
+function updateLocalStorage() {
+  const protocol = document.getElementById('protocol')?.value;
+  const method = document.getElementById('method')?.value;
+  const token = document.getElementById('token')?.value;
+  const ip = document.getElementById('ip')?.value;
+  const port = document.getElementById('port')?.value;
+  const endpoint = document.getElementById('endpoint')?.value;
+  const customEndpoint = document.getElementById('custom-endpoint')?.value;
+  const entity = document.getElementById('entity-input')?.value;
+
+  if (protocol) localStorage.setItem('haProtocol', protocol);
+  if (method) localStorage.setItem('haMethod', method);
+  if (token) localStorage.setItem('haToken', token);
+  if (ip) localStorage.setItem('haIP', ip);
+  if (port) localStorage.setItem('haPort', port);
+  if (endpoint) localStorage.setItem('haEndpoint', endpoint);
+  if (customEndpoint) localStorage.setItem('haCustomEndpoint', customEndpoint);
+  if (entity) localStorage.setItem('haEntity', entity);
+
+  console.log('Local storage updated with current input values.');
+}
+
+   //------------------------------------------------------------
+   // 2) Listeners to update localStorage 
+   //------------------------------------------------------------
+
+
     document.getElementById('protocol').addEventListener('change', function () {
       localStorage.setItem('haProtocol', this.value);
     });
+
+    document.getElementById('method').addEventListener('change', function () {
+      localStorage.setItem('haMethod', this.value);
+      console.log('Just stored haMethod using the method value from DOM')
+    });    
 
     document.getElementById('token').addEventListener('input', function () {
       localStorage.setItem('haToken', this.value);
@@ -329,6 +452,7 @@
 
     document.getElementById('endpoint').addEventListener('change', function () {
       localStorage.setItem('haEndpoint', this.value);
+       console.log('Just stored endpoint value from DOM')
       if (this.value === '') {
         document.getElementById('custom-endpoint').style.display = 'block';
       } else {
@@ -343,9 +467,80 @@
 
     document.getElementById('entity-input').addEventListener('input', function () {
       localStorage.setItem('haEntity', this.value);
+      console.log("Storing entity input in local storage - value is", this.value)
     });
 
-    // Fetch all entities from /api/states
+
+
+    let entities = [];
+
+    // On page load, retrieve theme from localStorage and set it
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme === 'dark') {
+      document.body.classList.add('dark-mode');
+    }
+
+window.addEventListener('load', function () {
+  // Check if localStorage is available and functional
+  function isLocalStorageAvailable() {
+    try {
+      const testKey = '__storage_test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  if (isLocalStorageAvailable()) {
+    try {
+      const mappings = {
+        haProtocol: 'protocol',
+        haMethod: 'method',
+        haToken: 'token',
+        haIP: 'ip',
+        haPort: 'port',
+        haEndpoint: 'endpoint',
+        haEntity: 'entity-input',
+        haCustomEndpoint: 'custom-endpoint'
+      };
+
+      Object.entries(mappings).forEach(([storageKey, elementId]) => {
+        const element = document.getElementById(elementId);
+        const value = localStorage.getItem(storageKey);
+
+        if (element && value !== null) {
+          element.value = value;
+
+          // Special handling for 'haEndpoint' and 'haCustomEndpoint'
+          if (storageKey === 'haEndpoint' && value === '') {
+            const customElement = document.getElementById('custom-endpoint');
+            if (customElement) {
+              customElement.style.display = 'block';
+              customElement.value = localStorage.getItem('haCustomEndpoint') || '';
+            }
+          }
+        }
+      });
+
+      // Ensure fetchClientInfo is defined before calling
+      if (typeof fetchClientInfo === 'function') {
+        fetchClientInfo();
+      } else {
+        console.warn('fetchClientInfo function is not defined.');
+      }
+    } catch (error) {
+      console.error('Error retrieving data from localStorage:', error);
+    }
+  } else {
+    console.error('localStorage is not supported or is disabled in this browser.');
+  }
+});
+
+
+   
+    // Fetch all entities from /api/states to allow user to choose
     document.getElementById('fetch-entities').addEventListener('click', async function () {
       toggleLoading(true);
         const protocol = document.getElementById('protocol').value.trim();
@@ -354,6 +549,7 @@
         const token = document.getElementById('token').value.trim();
 
       const entitiesUrl = `${protocol}://${ip}:${port}/api/states`;
+      
       const requestDetails = {
         method: 'GET',
         headers: {
@@ -378,22 +574,6 @@
       }
     });
 
-    // Show client's public IP and the current port
-    function fetchClientInfo() {
-      try {
-        fetch('https://api.ipify.org?format=json')
-          .then(response => response.json())
-          .then(data => {
-            document.getElementById('client-ip').textContent = `Public IP Address: ${data.ip}`;
-          });
-
-        const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-        document.getElementById('client-port').textContent = `Port: ${port}`;
-      } catch (error) {
-        document.getElementById('client-ip').textContent = 'Unable to fetch IP address.';
-        document.getElementById('client-port').textContent = 'Unable to determine port.';
-      }
-    }
 
     // Populate the list of entities for easy selection
     function populateEntityList(entities) {
@@ -453,10 +633,15 @@
       entityList.style.display = filteredEntities.length > 0 ? 'block' : 'none';
     });
 
-    // Handle form submissions to send API requests
+    // Handle form submissions to send API requests hittign button Send Request
+    //-------------------------------------------------------------------------
     document.getElementById('ha-form').addEventListener('submit', async function (event) {
       event.preventDefault();
       toggleLoading(true);
+      console.log('Submit Button clicked, getting values of input fields and updating local storage')
+
+       // Update localStorage with current input field values
+      updateLocalStorage();
 
       const protocol = document.getElementById('protocol').value;
       const ip = document.getElementById('ip').value.trim();
@@ -466,13 +651,17 @@
       const token = document.getElementById('token').value.trim();
       const payload = document.getElementById('json-payload').value.trim();
 
+     console.log('Line 577 json payload from DOM is .... ', payload);
+
       // If GET /api/states with a specific entity, fetch that entity's state
+
       const selectedEntity = document.getElementById('entity-input').value;
       if (method === 'GET' && endpoint === '/api/states' && selectedEntity) {
         endpoint = `/api/states/${selectedEntity}`;
       }
 
       const url = `${protocol}://${ip}:${port}${endpoint}`;
+     console.log('Send Request Button Path URL Constructed is .... ', url);
 
       const requestDetails = {
         method: method,
@@ -512,12 +701,16 @@
       }
     });
 
-    // Clear messages
-    document.getElementById('clear-messages').addEventListener('click', function () {
+    // Adding some Listeners for the various buttons 
+    document.getElementById('clear-messages').addEventListener('click', clearAllOutputFields);
+
+    function clearAllOutputFields (){
       document.getElementById('request-details').textContent = '';
       document.getElementById('response').textContent = '';
-      document.getElementById('error-message').textContent = '';
-    });
+      document.getElementById('error-message').textContent = ''; 
+      document.getElementById('json-payload').value = '';
+      console.log('Clear all Fields clicked')
+    }
 
     // Show/hide token
     document.getElementById('toggle-token').addEventListener('click', function () {
@@ -547,130 +740,185 @@
         .catch(() => showToast('Failed to copy response', 'danger'));
     });
 
-    // Example: fetch entity-device relationships from an API Endpoint
-    document.getElementById('fetch-relationships').addEventListener('click', async function ()
 
-     {
-      toggleLoading(true);
-// Retrieve and trim input values
-      const protocol = document.getElementById('protocol').value.trim();
-      const ip = document.getElementById('ip').value.trim();
-      const port = document.getElementById('port').value.trim();
-      const token = document.getElementById('token').value.trim();
-      const endpoint = document.getElementById('endpoint').value.trim();
-      const entityId = document.getElementById('entity-input').value.trim();
+    //----------------------------------------------------------
+    // fetch entity-device relationships from an API Endpoint ... using Fetch Relationships Button
+    //----------------------------------------------------------
 
-// validate the user input
-function isValidInput(input) {
-  return input && input.trim() !== '';
+function doFetchRelationshipEvents(){
+
+  updateLocalStorage();
+  fetchRelationships();
 }
 
-if (![protocol, ip, port, token, endpoint, entityId].every(isValidInput)) {
-  document.getElementById('error-message').textContent = 'Please fill in all required fields.';
-  toggleLoading(false);
-  return;
+document.getElementById('fetch-relationships').addEventListener('click', doFetchRelationshipEvents);
+
+
+async function fetchRelationships() {
+  console.log('Fetch Relationships button clicked');
+  toggleLoading(true);
+
+  const inputs = getInputValues();
+  console.log('Input values:', inputs);
+  const errorMessages = validateInputs(inputs);
+  console.log('Validation errors:', errorMessages);
+
+  if (errorMessages.length > 0) {
+    displayErrors(errorMessages);
+    toggleLoading(false);
+    return;
+  }
+
+  const deviceInfoUrl = constructUrl(inputs);
+  console.log('Constructed URL:', deviceInfoUrl);
+  const headers = prepareHeaders(inputs.token, inputs.customHeaders);
+  console.log('Prepared headers:', headers);
+  const fetchOptions = prepareFetchOptions(inputs.httpMethod, headers, inputs.requestBody);
+  console.log('Fetch options:', fetchOptions);
+
+  try {
+    console.log(' Starting into Try for fetch action... DeviceInfoURL is ... ', deviceInfoUrl)
+    console.log('fetchOptions is ... ', fetchOptions)
+    const response = await fetch(deviceInfoUrl, fetchOptions);
+    console.log('Response received:', response);
+    logRequestAndResponse(deviceInfoUrl, fetchOptions, response);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response text:', errorText);
+      throw new Error(`Error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('Response data:', data);
+    displayResponse(data, response.headers);
+    showToast('Relationships fetched successfully!', 'success');
+  } catch (error) {
+    console.error('Error fetching relationships:', error);
+    document.getElementById('error-message').textContent = `Error fetching relationships: ${error.message}`;
+    showToast(`Error fetching relationships: ${error.message}`, 'danger');
+  } finally {
+    toggleLoading(false);
+  }
+}
+
+function getInputValues() {
+  return {
+    protocol: document.getElementById('protocol').value.trim(),
+    ip: document.getElementById('ip').value.trim(),
+    port: document.getElementById('port').value.trim(),
+    token: document.getElementById('token').value.trim(),
+    endpoint: document.getElementById('endpoint').value.trim(),
+    entityId: document.getElementById('entity-input').value.trim(),
+    httpMethod: document.getElementById('method').value.trim().toUpperCase(),
+    customHeaders: document.getElementById('custom-endpoint').value.trim(),
+    requestBody: document.getElementById('json-payload').value.trim()
+  };
+}
+
+function validateInputs(inputs) {
+  let errorMessages = [];
+
+  if (!isValidInput(inputs.protocol)) {
+    errorMessages.push('Invalid or missing protocol.');
+  } else if (!isValidProtocol(inputs.protocol)) {
+    errorMessages.push('Protocol must be either "http" or "https".');
+  }
+
+  if (!isValidInput(inputs.ip)) {
+    errorMessages.push('Invalid or missing IP address.');
+  } else if (!isValidIP(inputs.ip)) {
+    errorMessages.push('IP address is not in a valid format.');
+  }
+
+  if (!isValidInput(inputs.port)) {
+    errorMessages.push('Invalid or missing port.');
+  } else if (!isValidPort(inputs.port)) {
+    errorMessages.push('Port must be a number between 1 and 65535.');
+  }
+
+  if (!isValidInput(inputs.token)) {
+    errorMessages.push('Access token is required.');
+  }
+
+  if (!isValidInput(inputs.endpoint)) {
+    errorMessages.push('Endpoint is required.');
+  }
+
+  if (['POST', 'PUT', 'PATCH'].includes(inputs.httpMethod) && !isValidInput(inputs.requestBody)) {
+    errorMessages.push('Request body is required for POST, PUT, or PATCH methods.');
+  }
+
+  return errorMessages;
+}
+
+function displayErrors(errorMessages) {
+  document.getElementById('error-message').innerHTML = errorMessages.join('<br>');
+}
+
+function constructUrl(inputs) {
+  let url = `${inputs.protocol}://${inputs.ip}:${inputs.port}${inputs.endpoint}`;
+  if (isValidInput(inputs.entityId)) {
+    if (url.endsWith('/')) {
+      url = url.slice(0, -1);
+    }
+    url += `/${encodeURIComponent(inputs.entityId)}`;
+  }
+  return url;
+}
+
+function prepareHeaders(token, customHeaders) {
+  let headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+
+  if (isValidInput(customHeaders)) {
+    try {
+      const parsedHeaders = JSON.parse(customHeaders);
+      headers = { ...headers, ...parsedHeaders };
+    } catch (error) {
+      document.getElementById('error-message').textContent = 'Invalid custom headers format. Please provide a valid JSON string.';
+      toggleLoading(false);
+      throw error;
+    }
+  }
+
+  return headers;
+}
+
+function prepareFetchOptions(httpMethod, headers, requestBody) {
+  const options = {
+    method: httpMethod,
+    headers: headers
+  };
+
+  if (['POST', 'PUT', 'PATCH'].includes(httpMethod) && isValidInput(requestBody)) {
+    options.body = requestBody;
+  }
+
+  return options;
+}
+
+function logRequestAndResponse(url, options, response) {
+  console.log('Request URL:', url);
+  console.log('Request Options:', options);
+  console.log('Response Status:', response.status);
+  console.log('Response Headers:', [...response.headers.entries()]);
+}
+
+function displayResponse(data, headers) {
+  const headersBox = document.getElementById('headers-box');
+  headersBox.textContent = JSON.stringify([...headers.entries()], null, 2);
+
+  const relationshipsBox = document.getElementById('relationships-box');
+  relationshipsBox.innerHTML = `<pre>${syntaxHighlight(JSON.stringify(data, null, 2))}</pre>`;
 }
 
 
-      // Hypothetical endpoint; replace with the actual one you want
-      let deviceInfoUrl = `${protocol}://${ip}:${port}${endpoint}`;
-
-      if (isValidInput(entityId)) {
-     // Ensure the endpoint does not end with a slash
-        if (deviceInfoUrl.endsWith('/')) {
-           deviceInfoUrl = deviceInfoUrl.slice(0, -1);
-       }
-         // Append the encoded entityId
-       deviceInfoUrl += `/${encodeURIComponent(entityId)}`;
-      }
 
 
 
-      try {
-        const response = await fetch(deviceInfoUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data = await response.json();
-        document.getElementById('relationships-box').textContent =
-          JSON.stringify(data, null, 2);
-        showToast('Relationships fetched successfully!', 'success');
-      } catch (error) {
-        document.getElementById('error-message').textContent = `Error fetching relationships: ${error.message}`;
-        showToast(`Error fetching relationships: ${error.message}`, 'danger');
-      } finally {
-        toggleLoading(false);
-      }
-    });
-
-    // Show help content in modal
-    const helpModal = document.getElementById('helpModal');
-    helpModal.addEventListener('show.bs.modal', function (event) {
-      const button = event.relatedTarget;
-      const topic = button.getAttribute('data-help-topic');
-      const modalBody = helpModal.querySelector('#helpModalBody');
-      modalBody.textContent = getHelpMessage(topic);
-    });
-
-    function getHelpMessage(topic) {
-      switch (topic) {
-        case 'endpoint':
-          return 'Endpoints define which part of the API you are accessing. For example, /api/states for states.';
-        case 'method':
-          return 'HTTP methods define the type of action: GET (retrieve), POST (create), PUT (update), DELETE (remove).';
-        case 'payload':
-          return 'Payloads are JSON objects sent with POST or PUT requests to specify data or configuration.';
-        default:
-          return 'No help available for this topic.';
-      }
-    }
-
-    // Utility: Toggle loading spinner overlay
-    function toggleLoading(show) {
-      document.getElementById('loadingOverlay').style.display = show ? 'block' : 'none';
-    }
-
-    // Utility: Show a toast notification
-    function showToast(message, type = 'primary') {
-      const toastEl = document.createElement('div');
-      toastEl.className = `toast align-items-center text-bg-${type} border-0`;
-      toastEl.role = 'alert';
-      toastEl.setAttribute('aria-live', 'assertive');
-      toastEl.setAttribute('aria-atomic', 'true');
-
-      const toastBody = document.createElement('div');
-      toastBody.className = 'd-flex';
-
-      const toastMessage = document.createElement('div');
-      toastMessage.className = 'toast-body';
-      toastMessage.textContent = message;
-
-      const closeButton = document.createElement('button');
-      closeButton.type = 'button';
-      closeButton.className = 'btn-close btn-close-white me-2 m-auto';
-      closeButton.setAttribute('data-bs-dismiss', 'toast');
-      closeButton.setAttribute('aria-label', 'Close');
-
-      toastBody.appendChild(toastMessage);
-      toastBody.appendChild(closeButton);
-      toastEl.appendChild(toastBody);
-
-      const toastContainer = document.getElementById('toastPlaceholder');
-      toastContainer.appendChild(toastEl);
-
-      const bsToast = new bootstrap.Toast(toastEl, { delay: 3000 });
-      bsToast.show();
-
-      toastEl.addEventListener('hidden.bs.toast', () => {
-        toastEl.remove();
-      });
-    }
   </script>
 </body>
 </html>
