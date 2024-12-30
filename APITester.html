@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Home Assistant API Tester - Validated - </title>
+  <title>Home Assistant API Tester - Minimum Viable- </title>
   <!-- Bootstrap CSS -->
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
@@ -98,6 +98,13 @@
           <option value="https">https</option>
         </select>
       </div>
+      <span 
+    class="help-link" 
+    data-bs-toggle="modal" 
+    data-bs-target="#helpModal" 
+    data-help-topic="protocol"
+>?</span>
+
 
       <div class="mb-3">
         <label for="ip" class="form-label">IP Address:</label>
@@ -110,6 +117,12 @@
           placeholder="e.g., 192.168.1.100" 
           list="ip-list"
         >
+        <span 
+    class="help-link" 
+    data-bs-toggle="modal" 
+    data-bs-target="#helpModal" 
+    data-help-topic="ip"
+>?</span>
         <datalist id="ip-list"></datalist>
       </div>
 
@@ -124,7 +137,18 @@
           placeholder="e.g., 8123" 
           list="port-list"
         >
-        <datalist id="port-list"></datalist>
+
+        <datalist id="port-list">
+            <option value="80">
+            <option value="8080">
+            <option value="8123">
+        </datalist>
+          <span 
+          class="help-link" 
+          data-bs-toggle="modal" 
+          data-bs-target="#helpModal" 
+          data-help-topic="port"
+        >?</span>
       </div>
 
       <div class="mb-3">
@@ -135,7 +159,7 @@
           <option value="/api/services">/api/services</option>
           <option value="/api/config">/api/config</option>
           <option value="/api/history">/api/history</option>
-          <option value="">Custom</option>
+          <option value="Custom">Custom</option>
         </select>
         <input 
           type="text" 
@@ -178,6 +202,12 @@
           class="form-control" 
           placeholder="Type to search entities..."
         >
+        <span 
+    class="help-link" 
+    data-bs-toggle="modal" 
+    data-bs-target="#helpModal" 
+    data-help-topic="entity"
+>?</span>
         <ul id="entity-list" class="list-group mt-2" style="display: none;"></ul>
         <button 
           type="button" 
@@ -196,6 +226,12 @@
           required 
           placeholder="Your long-lived access token"
         >
+        <span 
+    class="help-link" 
+    data-bs-toggle="modal" 
+    data-bs-target="#helpModal" 
+    data-help-topic="token"
+>?</span>
         <button 
           type="button" 
           id="toggle-token" 
@@ -220,6 +256,14 @@
       </div>
 
       <button type="submit" class="btn btn-primary">Send Request</button>
+<span 
+    class="help-link" 
+    data-bs-toggle="modal" 
+    data-bs-target="#helpModal" 
+    data-help-topic="sendQuery"
+>?</span>
+
+
     </form>
 
     <div class="mt-4">
@@ -239,6 +283,13 @@
     <pre id="relationships-box" contenteditable="true"></pre>
     <button type="button" id="fetch-relationships" class="btn btn-outline-secondary btn-sm">Fetch Relationships</button>
 
+<span 
+    class="help-link" 
+    data-bs-toggle="modal" 
+    data-bs-target="#helpModal" 
+    data-help-topic="fetchRelationships"
+>?</span>
+
 
     <pre id="headers-box" contenteditable="true"></pre>
     <div id="relationships-box"></div>
@@ -246,8 +297,8 @@
 
 
   <!-- Help Modal -->
-  <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+  <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" role="dialog" inert>
+    <div class="modal-dialog" tabindex="-1">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="helpModalLabel">Help</h5>
@@ -281,18 +332,70 @@
 
      // Utility functions: getHelpMessage, toggleLoadingSpinner, ShowToast notification
 
-        function getHelpMessage(topic) {
-      switch (topic) {
-        case 'endpoint':
-          return 'Endpoints define which part of the API you are accessing. For example, /api/states for states.';
-        case 'method':
-          return 'HTTP methods define the type of action: GET (retrieve), POST (create), PUT (update), DELETE (remove).';
-        case 'payload':
-          return 'Payloads are JSON objects sent with POST or PUT requests to specify data or configuration.';
-        default:
-          return 'No help available for this topic.';
-      }
+
+
+// Declare lastFocusedElement at the beginning
+
+let lastFocusedElement;
+
+// Initialize the modal instance
+const helpModalElement = document.getElementById('helpModal');
+const helpModal = new bootstrap.Modal(helpModalElement);
+
+
+// Event listener to handle modal show
+helpModalElement.addEventListener('show.bs.modal', function () {
+  // Remove inert attribute when modal is shown
+  helpModalElement.removeAttribute('inert');
+});
+
+// Event listener to return focus to the last focused element after modal is hidden
+
+helpModalElement.addEventListener('hidden.bs.modal', function () {
+    // Add inert attribute when modal is hidden
+  helpModalElement.setAttribute('inert', '');
+    // Return focus to the last focused element
+  if (lastFocusedElement) {
+    lastFocusedElement.focus();
+  }
+});
+
+// Listeners to update and select a help pop-up
+document.querySelectorAll('.help-link').forEach(link => {
+  link.addEventListener('click', function() {
+    const topic = this.getAttribute('data-help-topic');
+    const modalBody = document.getElementById('helpModalBody');
+
+    // Store the reference to the last focused element
+    lastFocusedElement = this;
+
+    const helpContent = {
+      method: 'HTTP methods define the type of action: GET (retrieve), POST (create), PUT (update), DELETE (remove).',
+      endpoint: 'Endpoints define which part of the API you are accessing. Example: /api/states for states.',
+      payload: 'Payloads are JSON objects sent with POST or PUT requests to specify data or configuration.',
+      protocol: 'Protocol defines whether to use HTTP or HTTPS to connect to the Home Assistant API.',
+      ip: 'Enter the IP address of the Home Assistant instance (e.g., 192.168.1.100).',
+      port: 'Specify the port used by Home Assistant, typically 8123 for default configurations.',
+      entity: 'Type or select an entity ID from your Home Assistant instance (e.g., light.living_room).',
+      token: 'Provide your long-lived access token to authenticate with the Home Assistant API.',
+      sendQuery: 'Click to send the constructed API request using the specified settings. Entity is explicitly not needed to return all entities.',
+      fetchRelationships: 'Fetch relationships between entities and devices in your Home Assistant setup. A specific Entity Choice is required'
+    };
+
+    modalBody.textContent = helpContent[topic] || 'No help available for this topic.';
+
+    // Show the modal
+    helpModal.show();
+
+    // Set focus to the modal dialog
+    const modalDialog = document.querySelector('#helpModal .modal-dialog');
+    if (modalDialog) {
+      modalDialog.focus();
     }
+  });
+});
+
+
 
     // Utility: Toggle loading spinner overlay
     function toggleLoading(show) {
@@ -452,8 +555,8 @@ function updateLocalStorage() {
 
     document.getElementById('endpoint').addEventListener('change', function () {
       localStorage.setItem('haEndpoint', this.value);
-       console.log('Just stored endpoint value from DOM')
-      if (this.value === '') {
+       console.log('Just stored endpoint value from DOM ... value is ...', this.value)
+      if (this.value === 'Custom') {
         document.getElementById('custom-endpoint').style.display = 'block';
       } else {
         document.getElementById('custom-endpoint').style.display = 'none';
@@ -461,15 +564,15 @@ function updateLocalStorage() {
       }
     });
 
-    document.getElementById('custom-endpoint').addEventListener('input', function () {
+    const myCustomEndpoint = document.getElementById('custom-endpoint').addEventListener('input', function () {
       localStorage.setItem('haCustomEndpoint', this.value);
+      console.log('Just stored myCustomEndpoint value from DOM ... value is..', this.value)
     });
 
     document.getElementById('entity-input').addEventListener('input', function () {
       localStorage.setItem('haEntity', this.value);
       console.log("Storing entity input in local storage - value is", this.value)
     });
-
 
 
     let entities = [];
